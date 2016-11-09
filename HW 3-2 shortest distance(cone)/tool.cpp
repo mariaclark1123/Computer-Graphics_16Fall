@@ -51,9 +51,9 @@ void draw_plane(double z)
     //Set plane color to white
 	glColor3f(1.0, 1.0, 1.0);
 	glBegin(GL_QUADS);
-	glVertex3f(0.0, 0.0, z);
-	glVertex3f(800.0, 0.0, z);
-	glVertex3f(800.0, 480.0, z);
-	glVertex3f(0.0, 480.0, z);
+	glVertex3f(-1000.0, -1000.0, z);
+	glVertex3f(2400.0, 0.0, z);
+	glVertex3f(2400.0, 1000.0, z);
+	glVertex3f(0.0, 1000.0, z);
 	glEnd();
 }

@@ -14,10 +14,15 @@ Colorpoint movept;
 GLsizei width = 800, height = 480;
 Color curve_color1, curve_color2;
 Colorpoint cur_pt[1025];
+Point ctrl;
+
 int edit_ctrlpts_idx = -1;
 int movept_select = -1;
+int ctrl_select = -1;
 int selectedscene = 0;
 int selected = -1;
+int plane_z = 0;
+
 bool isDragging = false;
 
 
@@ -28,7 +33,7 @@ Vector3d upVector;
 int hit_index(CubicBezierCurve *curve, int x, int y)
 {
 	int i;
-	for (i = 0; i<4; ++i) 
+	for (i = 0; i < 4; ++i) 
 	{
 		REAL tx = curve->control_pts[i][0] - x;
 		REAL ty = curve->control_pts[i][1] - y;
@@ -55,7 +60,7 @@ void init()
 
 	curve_color1.red = 1;
 	curve_color1.green = 0;
-	curve_color1.blue = 0;
+	curve_color1.blue = 1;
 
 	curve_color2.red = 0;
 	curve_color2.green = 1;
@@ -63,6 +68,10 @@ void init()
 	
 	movept.pt[0] = 200;
 	movept.pt[1] = 350;
+
+	//can not move in y
+	ctrl[0] = 30;
+	ctrl[1] = 20;
 	
 	//set initial curve control points
 	SET_PT2(curve.control_pts[0], 150, 190);
@@ -83,10 +92,13 @@ void reshape_callback(GLint nw, GLint nh)
 	glLoadIdentity();
 	
     glOrtho(0, width, 0, height, -1000, 1000);
-	glMatrixMode(GL_MODELVIEW);
-	//gluLookAt(0.0, 0.0, 100, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+	//glOrtho(-width, width, -height, height, -3000, 3000);
 
-	gluLookAt(0.0, 0.0, 10, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	gluLookAt(0.0, 0.0, 100, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+	//gluLookAt(0.0, 100.0, 0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
 }
 
 //Show cones on the curve
@@ -131,7 +143,8 @@ void draw_curvemesh(CubicBezierCurve curve)
 {
 #define RES 100
 	int i;
-	glColor3f(1.0, 1.0, 1.0);
+	/* curve */
+	glColor3ub(0, 0, 0);
 	glLineWidth(2.0);
 	glBegin(GL_LINE_STRIP);
 	for (i = 0; i <= RES; ++i) {
@@ -142,8 +155,8 @@ void draw_curvemesh(CubicBezierCurve curve)
 	}
 	glEnd();
 
-	/* control mesh */
-	glColor3ub(255, 0, 255);
+	/* ctrl mesh */
+	glColor3ub(255, 255, 255);
 	glLineWidth(1.0);
 	glBegin(GL_LINE_STRIP);
 	for (i = 0; i<4; ++i) 
@@ -154,7 +167,7 @@ void draw_curvemesh(CubicBezierCurve curve)
 	glEnd();
 
 	/* control pts */
-	glColor3ub(255, 255, 255);
+	glColor3ub(0, 0, 255);
 	glPointSize(7.0);
 	glBegin(GL_POINTS);
 	for (i = 0; i<4; ++i) 
@@ -170,15 +183,14 @@ void display_callback(void)
 #define YSL 0.0009765
 	REAL red, green, blue;
 	Point target;
+
 	//initialization
 	for (int i = 0; i < 1025; i++)
 	{
 		Point pt;
 		const REAL t = (REAL)i / (REAL)Div;
 		evaluate(&curve, t, pt);
-		cur_pt[i].red = 0;
-		cur_pt[i].green = 0;
-		cur_pt[i].blue = 0;
+
 		cur_pt[i].pt[0] = pt[0];
 		cur_pt[i].pt[1] = pt[1];
 	}
@@ -193,8 +205,8 @@ void display_callback(void)
 	
 	GLfloat rgb[3];
 	glReadPixels(movept.pt[0], movept.pt[1], 1, 1, GL_RGB, GL_FLOAT, rgb);
-	printf("movept's color is (%f, %f, %f)\n", rgb[0], rgb[1], rgb[2]);
-	
+
+	//set each point's color on the curve
 	for (int i = 0; i < 1025; i++)
 	{
 		if (((rgb[0] - cur_pt[i].red) < YSL) && ((rgb[1] - cur_pt[i].green) < YSL) && ((rgb[2] - cur_pt[i].blue) < YSL))
@@ -204,15 +216,21 @@ void display_callback(void)
 			break;
 		}
 	}
-	draw_plane(140);//??z?0-200îÜ????ï¸ØüêÆ?êÆá³£¬200îÜ?ý¦èÇîïö¦?ÖõßÓ?éÍï·Óð??coneîÜî¼Ý»Öõ£¬Ó£ä²èÇîïÜôò±Ô³200ãÀ??Öõ
+
+	draw_plane(plane_z);
 	glDisable(GL_DEPTH_TEST);
 	
 	draw_point(target);
 	draw_line(target, movept.pt);
 	draw_point(movept.pt);
 	draw_curvemesh(curve);
+	draw_point(ctrl);
 
-	printf("target is (%f,%f)\n", target[0], target[1]);
+	glColor3f(0.0, 0.0, 0.0);
+	glBegin(GL_LINES);
+	glVertex3f(30, 20, 0.0);
+	glVertex3f(230, 20, 0.0);
+	glEnd();
 	glutSwapBuffers();
 }
 
@@ -225,10 +243,12 @@ void mouse_callback(GLint button, GLint action, GLint x, GLint y)
 		case GLUT_DOWN:
 			edit_ctrlpts_idx = hit_index(&curve, x, height - y);
 			movept_select = hit_point(movept.pt, x, height - y);
+			ctrl_select = hit_point(ctrl, x, height - y);
 			break;
 		case GLUT_UP:
 			edit_ctrlpts_idx = -1;
 			movept_select = -1;
+			ctrl_select = -1;
 			break;
 		}
 	}
@@ -238,7 +258,7 @@ void mouse_move_callback(GLint x, GLint y)
 {
 	if (edit_ctrlpts_idx != -1)
 	{
-		if (x < 800 && x > 0 && y < 480 && y > 0)
+		if (x < width && x > 0 && y < height && y > 0)
 		{
 			curve.control_pts[edit_ctrlpts_idx][0] = (REAL)x;
 			curve.control_pts[edit_ctrlpts_idx][1] = (REAL)(height - y);
@@ -246,10 +266,18 @@ void mouse_move_callback(GLint x, GLint y)
 	}
 	if (movept_select != -1)
 	{
-		if (x < 800 && x > 0 && y < 480 && y > 0)
+		if (x < width && x > 0 && y < height && y > 0)
 		{
 			movept.pt[0] = (REAL)x;
 			movept.pt[1] = (REAL)(height - y);
+		}
+	}
+	if (ctrl_select != -1)
+	{
+		if (x <= 230 && x >= 30)
+		{
+			ctrl[0] = (REAL)x;
+			plane_z = x - 30;
 		}
 	}
 	glutPostRedisplay();
