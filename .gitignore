@@ -17,8 +17,6 @@ $RECYCLE.BIN/
 #visual studio files
 *.opensdf
 *.sdf
-*.vcxproj
-*.filters
 
 
 # Windows shortcuts
