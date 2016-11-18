@@ -12,30 +12,98 @@ using namespace std;
 CubicBezierCurve obj1[2];
 CubicBezierCurve obj2[5];
 
+Point obj1_pts[200];
+Point obj2_pts[500];
+//Point fill1[2500];
+//Point fill2[2500];
+vector <Obj_Pt> fill1;
+vector <Obj_Pt> fill2;
+Point obj1ctrl[6];
+Point obj2ctrl[15];
+Point obj1_center;
+Point obj2_center;
+Point target;
+
 GLsizei width = 1200, height = 600; //DC
-REAL viewportwidth = 400, viewportheight = 300;
+REAL viewportwidth = 400, viewportheight = 300;//viewportwidth is 1/3 of width
 
 /*global parameters*/
 int selectedscene = 0;
 int obj1_edit_ctrlpts_idx = -1;
 int obj2_edit_ctrlpts_idx = -1;
-
-bool isDrawControlMesh = true;
-bool isDottedLine = false;
-
-Point obj1_pts[200];
-Point obj2_pts[500];
-Point obj1ctrl[6];
-Point obj2ctrl[15];
-
-#define RES 256
-#define MAX_CHAR 128
-
 int mouseButton = -1;
 int lastX = -1;
 int lastY = -1;
 
-Point target;
+bool isDrawControlMesh = true;
+bool isDottedLine = false;
+
+#define RES 256
+#define MAX_CHAR 128
+
+int intersect(Point pt, Point* array, int num, int sign)
+{
+	//REAL inter[5];
+	REAL maxy, miny, midx;
+	Obj_Pt temp;
+	int count = 0;
+	for (int i = 0; i < num - 1; i++)
+	{
+		if (array[i][1] < array[i + 1][1])
+		{
+			miny = array[i][1];
+			maxy = array[i + 1][1];
+			midx = (array[i][0] + array[i + 1][0]) / 2.0;
+		}
+		else
+		{
+			miny = array[i + 1][1];
+			maxy = array[i][1];
+			midx = (array[i][0] + array[i + 1][0]) / 2.0;
+		}
+		if (pt[0] <= midx && pt[1] <= maxy && pt[1]>miny)
+		{
+			count++;
+		}
+	}
+	//printf("intersection:%d\n", count);
+	if (count%2 == 1)
+	{
+		//push pt into vector
+		glColor3f(1.0, 1.0, 0.6);
+		glPointSize(4.0);
+		glBegin(GL_POINTS);
+		glVertex2f(pt[0], pt[1]);
+		glEnd();
+
+		temp.x = (int)pt[0];
+		temp.y = (int)pt[1];
+		if (sign == 1)
+			fill1.push_back(temp);
+		else 
+			fill2.push_back(temp);
+	}
+	return count;
+}
+
+void fill(Point* array, int num, REAL xmin, REAL xmax, REAL ymin, REAL ymax, int sign)
+{
+	REAL midx;
+	Point pt;
+	Point mid;
+
+	for (int i = 1; i < xmax - xmin; i++)
+	{
+		//x setting
+		pt[0] = (REAL)xmin + 4 * i;
+		for (int j = 1; j < ymax - ymin; j++)
+		{
+			//y setting
+			pt[1] = (REAL)ymin + 4 * j;
+			intersect(pt, array, num, sign);
+		}
+	}
+}
 
 void set_pts(Point* pt_array1, CubicBezierCurve* curve_array1, int curve_num1, Point* pt_array2, CubicBezierCurve* curve_array2, int curve_num2)
 {
@@ -136,7 +204,7 @@ void reshape_callback(GLint nw, GLint nh)
 {
 	width = nw;
 	height = nh;
-	viewportwidth = width / 2.0f;
+	viewportwidth = width / 3.0f;
 	viewportheight = height / 2.0f;
 
 	glMatrixMode(GL_PROJECTION);
@@ -163,30 +231,31 @@ void display_callback()
 	//viewport
 	glBegin(GL_LINES);
 	glVertex3f(-1, 0, 0);
-	glVertex3f(0, 0, 0);
+	glVertex3f(-0.3333, 0, 0);
 	glEnd();
 	//viewport ordinate
 	glBegin(GL_LINES);
-	glVertex3f(0, -1, 0);
-	glVertex3f(0, 1, 0);
+	glVertex3f(-0.3333, -1, 0);
+	glVertex3f(-0.3333, 1, 0);
 	glEnd();
 	
 	//Set the curve pts to array
 	set_pts(obj1_pts, obj1, 2, obj2_pts, obj2, 5);
-	int xmax1, xmin1, ymax1, ymin1;
-	int xmax2, xmin2, ymax2, ymin2;
+	
+	REAL xmax1, xmin1, ymax1, ymin1;
+	REAL xmax2, xmin2, ymax2, ymin2;
 
 	xmax1 = get_Xmax(obj1_pts, 200);
 	xmin1 = get_Xmin(obj1_pts, 200);
 	ymax1 = get_Ymax(obj1_pts, 200);
 	ymin1 = get_Ymin(obj1_pts, 200);
-	//printf("xmax1 is %d, xmin1 is %d, ymax is %d, ymin is %d\n", xmax1, xmin1, ymax1, ymin1);
+	//printf("xmax1 is %f, xmin1 is %f, ymax1 is %f, ymin1 is %f\n", xmax1, xmin1, ymax1, ymin1);
 
 	xmax2 = get_Xmax(obj2_pts, 500);
 	xmin2 = get_Xmin(obj2_pts, 500);
 	ymax2 = get_Ymax(obj2_pts, 500);
 	ymin2 = get_Ymin(obj2_pts, 500);
-	//printf("xmax1 is %d, xmin1 is %d, ymax is %d, ymin is %d\n", xmax1, xmin1, ymax1, ymin1);
+	//printf("xmax2 is %d, xmin2 is %d, ymax2 is %d, ymin2 is %d\n", xmax2, xmin2, ymax2, ymin2);
 
 	/******************OBJ1****************/
 	glViewport(0, viewportheight, viewportwidth, viewportheight);
@@ -196,9 +265,28 @@ void display_callback()
 	glColor3ub(0, 1.0, 1.0);
 	glRasterPos2f(10.0f, 280.0f);
 	drawString("--Object1 in XY--");
+	draw_boundbox(xmin1, xmax1, ymin1, ymax1);
+
+	//??xmin-xmax£¬ymin-ymaxÛõ??îÜá¶êóïÃãÀÜú?ðë?Ëì£¬?ðë??õó
+	/***************************************/
+	/*for (int i = 0; i < (xmax1 - xmin1); i++)
+	{
+		for (int j = 0; j < (ymax1 - ymin1); j++)
+		{
+			Point pt;
+			pt[0] = 0;
+			pt[1] = 1;
+			pt[0] = (xmin1 + i)*1.0;
+			pt[1] = (ymin1 + j)*1.0;
+			judge_pt(obj1_pts, 200, xmin1, xmax1, ymin1, ymax1);
+		}
+	}*/
+	/**************************************/
+	//fill polygon
+	fill(obj1_pts, 200, xmin1, xmax1, ymin1, ymax1, 1);
+
 	for (int i = 0; i < 2; i++)
 		draw_curve(obj1[i]);
-	draw_boundbox(xmin1, xmax1, ymin1, ymax1);
 	/*****************OBJ2****************/
 	glViewport(0, 0, viewportwidth, viewportheight);
 	glLoadIdentity();
@@ -207,20 +295,28 @@ void display_callback()
 	glColor3ub(0, 1.0, 1.0);
 	glRasterPos2f(10.0f, 280.0f);
 	drawString("--Object2 in XY--");                          //Draw control points in XZ
+	
+	//fill polygon
+	fill(obj2_pts, 500, xmin2, xmax2, ymin2, ymax2, 2);
 	for (int i = 0; i < 5;i++)
 		draw_curve(obj2[i]);
 	draw_boundbox(xmin2, xmax2, ymin2, ymax2);
- 
+	//	14:46
+//	draw_center(obj2_pts, &obj2_center, 500);
 	/* ----Minkowski Addition---- */
-	glViewport(viewportwidth, 0, width, 2 * viewportheight);
+	glViewport(viewportwidth, 0, 2 * viewportwidth, 2 * viewportheight);
 	glLoadIdentity();
 	gluOrtho2D(0, 2 * (REAL)viewportwidth, 0, 2 * (REAL)viewportheight);
 	//Designer annotation
 	glColor3ub(0, 1.0, 1.0);
 	glRasterPos2f(10.0f, 580.0f);
 	drawString("--Minkowski Addition--");
+	innerminkowski(fill1, fill2);
 	minkowski(obj1_pts, 2, obj2_pts, 5);
 
+	//clear vector
+	fill1.erase(fill1.begin(), fill1.end());
+	fill2.erase(fill2.begin(), fill2.end());
 	glutSwapBuffers();
 }
 

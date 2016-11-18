@@ -1,4 +1,3 @@
-
 /* -*- mode: c -*- */
 #include "curve.h"
 #include <stdio.h>

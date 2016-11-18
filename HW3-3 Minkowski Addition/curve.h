@@ -7,18 +7,13 @@
 #define EPS         1e-6        /* data type is float */
 
 typedef float REAL;
-typedef REAL  Point[2];
+typedef REAL Point[2];
 
 typedef struct CubicBezierCurve
 {
 	Point control_pts[4];
 }CubicBezierCurve;
 
-typedef struct CurvePts
-{
-	int obj;
-	Point curvept;
-}CurvePts;
 #ifdef DEBUG
 void PRINT_CTRLPTS(CubicBezierCurve* crv);
 #else

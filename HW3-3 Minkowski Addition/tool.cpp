@@ -104,9 +104,10 @@ REAL sq_dis(Point p1, Point p2)
 	return distance;
 }
 
-int get_Xmax(Point* array, int num)
+REAL get_Xmax(Point* array, int num)
 {
-	int i, max;
+	int i;
+	REAL max;
 	max = array[0][0];
 	for (i = 1; i < num; i++)
 	{
@@ -116,9 +117,10 @@ int get_Xmax(Point* array, int num)
 	return max;
 }
 
-int get_Xmin(Point* array, int num)
+REAL get_Xmin(Point* array, int num)
 {
-	int i, min;
+	int i;
+	REAL min;
 	min = array[0][0];
 	for (i = 1; i < num; i++)
 	{
@@ -128,9 +130,10 @@ int get_Xmin(Point* array, int num)
 	return min;
 }
 
-int get_Ymax(Point* array, int num)
+REAL get_Ymax(Point* array, int num)
 {
-	int i, max;
+	int i;
+	REAL max;
 	max = array[0][1];
 	for (i = 1; i < num; i++)
 	{
@@ -140,9 +143,10 @@ int get_Ymax(Point* array, int num)
 	return max;
 }
 
-int get_Ymin(Point* array, int num)
+REAL get_Ymin(Point* array, int num)
 {
-	int i, min;
+	int i;
+	REAL min;
 	min = array[0][1];
 	for (i = 1; i < num; i++)
 	{
