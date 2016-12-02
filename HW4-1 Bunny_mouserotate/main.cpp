@@ -7,11 +7,16 @@
 #include <windows.h>
 #include <cmath>
 
+typedef struct Texture
+{
+	float x;
+	float y;
+}Texture;
+
 #define M_PI 3.14159265358979323846
 
-int Rotate_axis = 0;
-float rotate_angle[3] = { 0.0,0.0,0.0 };
-const int INIT_SIZE = 600;
+int selectedView, selectedPoint[2];
+const int INIT_SIZE = 800;
 int width = INIT_SIZE;
 int height = INIT_SIZE;
 
@@ -34,6 +39,11 @@ int(*faces)[3] = NULL;
 int(*facenormal)[3] = NULL;
 int(*textureFace)[3] = NULL;
 float(*texCoords)[2] = NULL;
+
+double Length(double x, double y, double z)
+{
+	return std::sqrt(x*x + y*y + z*z);
+}
 
 void Init()
 {
@@ -62,6 +72,7 @@ void Init()
 		printf("%s file can not open", "bunny.txt");
 		exit(1);
 	}
+
 	while (!feof(fp))
 	{
 		fgets(line, 256, fp);
@@ -92,7 +103,7 @@ void Init()
 	normals = (float(*)[3])malloc(sizeof(float) * 3 * numNormals);
 	texCoords = (float(*)[2])malloc(sizeof(float) * 2 * numTexcoords);	//텍스쳐 
 	faces = (int(*)[3])malloc(sizeof(int) * 3 * numFaces);				//면 (정점)
-	//textureFace = (int(*)[3])malloc(sizeof(int) * 3 * numFaces);	    //면 (텍스쳐)
+	//	textureFace = (int(*)[3])malloc(sizeof(int) * 3 * numFaces);			//면 (텍스쳐)
 	facenormal = (int(*)[3])malloc(sizeof(int) * 3 * numFaces);         //면 (normal)
 
 	int j = 0, t = 0, n = 0, k = 0;
@@ -141,14 +152,13 @@ void Init()
 
 			int x1, x2, y1, y2, z1, z2;
 			fscanf(fp, "%s %d//%d %d//%d %d//%d", line, &x1, &x2, &y1, &y2, &z1, &z2);
-			//면의 정점                                                        
+			//면의 정점                                                          순서 정보
 			faces[IdxFace][0] = x1 - 1;
 			faces[IdxFace][1] = y1 - 1;
 			faces[IdxFace][2] = z1 - 1;
 			facenormal[IdxFace][0] = x2 - 1;
 			facenormal[IdxFace][1] = y2 - 1;
 			facenormal[IdxFace][2] = z2 - 1;
-
 			IdxFace++;
 		}
 	}
@@ -157,12 +167,24 @@ void Init()
 	upVector = Vector3d(0, 1, 0);
 }
 
-void spinDisplay()
+enum {FRONT, UP, LEFT, ROTATE};
+
+void SelectViewport(int view, bool clear)
 {
-	rotate_angle[Rotate_axis] += 5.0;
-	if (rotate_angle[Rotate_axis] >= 360.0)
-		rotate_angle[Rotate_axis] -= 360.0;
-	glutPostRedisplay();
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(-width, width, -height, height, -100000, 100000);
+
+	gluLookAt(eye.x, eye.y, eye.z, center.x, center.y, center.z, upVector.x, upVector.y, upVector.z);
+
+	glViewport(0, 0, width, height);
+
+	if (clear)
+	{
+		glScissor(0, 0, width, height);
+		glClearColor(0,0,0,1);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	}
 }
 
 void DrawModel()
@@ -172,54 +194,74 @@ void DrawModel()
 
 	for (int i = 0; i < numVertex; i++)
 	{
+			Vector3d mapped;
+			mapped.sub(center, eye);
 
-		Vector3d mapped;
-		mapped.sub(center, eye);
+			Vector3d n = Vector3d(normals[i][0], normals[i][1], normals[i][2]);
+			//change
+			if (n.dot(eye) < 0)
+				n.scale(-1);
+			//change
+			Vector3d lx, ly = upVector, lz = eye;
+			lz.normalize();
+			lx.cross(ly, lz);
+			
+			//change
+			//N is the relative position of n from z.
+			Vector3d N;
+			N.sub(n, lz);
 
-		Vector3d n = Vector3d(normals[i][0], normals[i][1], normals[i][2]);
-		n.scale(-2 * n.dot(mapped));
-		mapped.add(n);
-		mapped.normalize();
-
-		double sum = sqrt(mapped.x*mapped.x + mapped.y*mapped.y + pow(mapped.z + 1, 2));
-		texture[i][0] = (mapped.x / sum + 1) / 2;
-		texture[i][1] = (-mapped.y / sum + 1) / 2;
+			texture[i][0] = (N.dot(lx) + 1) / 2;
+			texture[i][1] = (-N.dot(ly) + 1) / 2;
+		//	printf("texture is (%f，%f)\n", texture[i][0], texture[i][1]);
 	}
 	//Draw
 	glPushMatrix();
+//	glColor3f(1.0, 1.0, 0.0);
 	glScalef(5000.0, 5000.0, 5000.0);
 	glEnable(GL_TEXTURE_2D);
 	for (int i = 0; i < numFaces - 1; i++)
 	{
+		//printf("faces %d is vertice %d\n", i, faces[i + 0] * 3 + 0);
+		
+		float p1[3] = { vertices[faces[i][0]][0], vertices[faces[i][0]][1], vertices[faces[i][0]][2] };
+		float p2[3] = { vertices[faces[i][1]][0], vertices[faces[i][1]][1], vertices[faces[i][1]][2] };
+		float p3[3] = { vertices[faces[i][2]][0], vertices[faces[i][2]][1], vertices[faces[i][2]][2] };
+		float t1[2] = { texture[faces[i][0]][0],texture[faces[i][0]][1]};
+		float t2[2] = { texture[faces[i][1]][0],texture[faces[i][1]][1]};
+		float t3[2] = { texture[faces[i][2]][0],texture[faces[i][2]][1]};
+	
 		glBegin(GL_TRIANGLES);
-		for (int j = 0; j < 3; j++)
-		{
-			float p[3] = { vertices[faces[i][j]][0], vertices[faces[i][j]][1], vertices[faces[i][j]][2] };
-			float t[2] = { texture[faces[i][j]][0],texture[faces[i][j]][1] };
-			glTexCoord2fv(t);
-			glVertex3fv(p);
-		}
+		glTexCoord2fv(t1);
+		glVertex3fv(p1);
+		glTexCoord2fv(t2);
+		glVertex3fv(p2);
+		glTexCoord2fv(t3);
+		glVertex3fv(p3);
+
 		glEnd();
 	}
 	glDisable(GL_TEXTURE_2D);
 	glPopMatrix();
 }
 
+int n = 0;
+
 void displayCallback()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //clear the color buffer and the depth buffer
+	glEnable(GL_SCISSOR_TEST);
+	//SelectViewport(view, true);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glOrtho(-width, width, -height, height, -100000, 100000);
 	gluLookAt(eye.x, eye.y, eye.z, center.x, center.y, center.z, upVector.x, upVector.y, upVector.z);
 	glViewport(0, 0, width, height);
 
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	glRotatef(rotate_angle[0], 1.0, 0.0, 0.0);
-	glRotatef(rotate_angle[1], 0.0, 1.0, 0.0);
-	glRotatef(rotate_angle[2], 0.0, 0.0, 1.0);
+
 	DrawModel();
+	glDisable(GL_SCISSOR_TEST);
+
 	glutSwapBuffers();
 }
 
@@ -235,11 +277,6 @@ void keyboardCallback(unsigned char key, int x, int y)
 {
 	if (key == 27)
 		exit(0);
-	else if (key == 32) //space
-	{
-		Rotate_axis = (Rotate_axis + 1) % 3;
-		printf("%d axis\n", Rotate_axis);
-	}
 	glutPostRedisplay();
 }
 
@@ -247,62 +284,69 @@ void mouseCallback(int button, int action, int x, int y)
 {
 	if (action == GLUT_DOWN)
 	{
+
+		selectedView = ROTATE;
 		lastX = x;
 		lastY = y;
 
 		mouseButton = button;
 	}
 	else if (action == GLUT_UP)
+	{
+		selectedView = -1;
 		mouseButton = -1;
+	}
 }
 
 void motionCallback(int x, int y)
 {
-	Vector3d lastP = getMousePoint(lastX, lastY, width, height, radius);
-	Vector3d currentP = getMousePoint(x, y, width, height, radius);
-
-	if (mouseButton == GLUT_LEFT_BUTTON)
+	if (selectedView == ROTATE)
 	{
-		Vector3d rotateVector;
-		rotateVector.cross(currentP, lastP);
-		double angle = -currentP.angle(lastP) * 2;
-		rotateVector = unProjectToEye(rotateVector, eye, center, upVector);
+		Vector3d lastP = getMousePoint(lastX, lastY, width, height, radius);
+		Vector3d currentP = getMousePoint(x, y, width, height, radius);
 
-		Vector3d dEye;
-		dEye.sub(center, eye);
-		dEye = rotate(dEye, rotateVector, -angle);
-		upVector = rotate(upVector, rotateVector, -angle);
-		eye.sub(center, dEye);
-	}
-	else if (mouseButton == GLUT_RIGHT_BUTTON) {
-		Vector3d dEye;
-		dEye.sub(center, eye);
-		double offset = 0.025;
-		if ((y - lastY) < 0) {
-			dEye.scale(1 - offset);
-		}
-		else {
-			dEye.scale(1 + offset);
-		}
-		eye.sub(center, dEye);
-	}
-	else if (mouseButton == GLUT_MIDDLE_BUTTON) {
-		double dx = x - width / 2.0f - lastX;
-		double dy = y - lastY;
-		if (dx != 0 || dy != 0)
+		if (mouseButton == GLUT_LEFT_BUTTON)
 		{
-			Vector3d moveVector(dx, dy, 0);
-			moveVector = unProjectToEye(moveVector, eye, center, upVector);
-			moveVector.normalize();
-			double eyeDistance = Vector3d(eye).distance(Vector3d(center));
-			moveVector.scale(std::sqrt(dx*dx + dy*dy) / 1000 * eyeDistance);
-			center.add(moveVector);
-			eye.add(moveVector);
-		}
-	}
-	lastX = x;
-	lastY = y;
+			Vector3d rotateVector;
+			rotateVector.cross(currentP, lastP);
+			double angle = -currentP.angle(lastP) * 2;
+			rotateVector = unProjectToEye(rotateVector, eye, center, upVector);
 
+			Vector3d dEye;
+			dEye.sub(center, eye);
+			dEye = rotate(dEye, rotateVector, -angle);
+			upVector = rotate(upVector, rotateVector, -angle);
+			eye.sub(center, dEye);
+		}
+		else if (mouseButton == GLUT_RIGHT_BUTTON) {
+			Vector3d dEye;
+			dEye.sub(center, eye);
+			double offset = 0.025;
+			if ((y - lastY) < 0) {
+				dEye.scale(1 - offset);
+			}
+			else {
+				dEye.scale(1 + offset);
+			}
+			eye.sub(center, dEye);
+		}
+		else if (mouseButton == GLUT_MIDDLE_BUTTON) {
+			double dx = x - width / 2.0f - lastX;
+			double dy = y - lastY;
+			if (dx != 0 || dy != 0)
+			{
+				Vector3d moveVector(dx, dy, 0);
+				moveVector = unProjectToEye(moveVector, eye, center, upVector);
+				moveVector.normalize();
+				double eyeDistance = Vector3d(eye).distance(Vector3d(center));
+				moveVector.scale(std::sqrt(dx*dx + dy*dy) / 1000 * eyeDistance);
+				center.add(moveVector);
+				eye.add(moveVector);
+			}
+		}
+		lastX = x;
+		lastY = y;
+	}
 	glutPostRedisplay();
 }
 
@@ -315,7 +359,6 @@ int main(int argc, char **argv)
 	glutKeyboardFunc(keyboardCallback);
 	glutMouseFunc(mouseCallback);
 	glutMotionFunc(motionCallback);
-	//glutIdleFunc(spinDisplay);
 	glutMainLoop();
 	return 0;
 }
