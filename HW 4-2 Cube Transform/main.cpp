@@ -257,28 +257,57 @@ void DrawSurface(int index)
 		Cos[i] = cos(rotate_angle[i] * M_PI / 180);
 	}
 
+	//Rendering as if the environment follows around, staying behind the camera.
+	//Thus, the camera appears to be fixed, with the model spinning instead.
 	for (int i = 0; i <= LOD; i++)
 		for (int j = 0; j <= LOD; j++)
 		{
-			// calculating reflecting vector
-			Vector3d mapped;
-			mapped.sub(center, eye);
-
-			/* rotate normal */
+			//Flip normal when looking from behind.
 			rx = (Cos[1]) * surfaceNormals[i][j][index][0] + (Sin[1]) * surfaceNormals[i][j][index][2];
 			ry = (Sin[0] * Sin[1]) * surfaceNormals[i][j][index][0] + (Cos[0]) * surfaceNormals[i][j][index][1] + (-Sin[0] * Cos[1]) * surfaceNormals[i][j][index][2];
 			rz = (-Cos[0] * Sin[1]) * surfaceNormals[i][j][index][0] + (Sin[0]) * surfaceNormals[i][j][index][1] + (Cos[0] * Cos[1]) * surfaceNormals[i][j][index][2];
-		
 			Vector3d n = Vector3d(rx, ry, rz);
-			n.scale(-2 * n.dot(mapped));
-			mapped.add(n);
-			mapped.normalize();
+			//Vector3d n(surfaceNormals[i][j][index][0], surfaceNormals[i][j][index][1], surfaceNormals[i][j][index][2]);
+			if (n.dot(eye) < 0)
+				n.scale(-1);
 
-			// for sphere mapping
-			double sum = sqrt(mapped.x*mapped.x + mapped.y*mapped.y + pow(mapped.z+1,2));
-			texCoords[i][j][index][0] = (mapped.x / sum + 1) / 2;
-			texCoords[i][j][index][1] = (-mapped.y / sum + 1) / 2;
+			//upVector is local y(0,1,0), eye is local z(0,0,1).
+			Vector3d lx, ly = upVector, lz = eye;
+			lz.normalize();
+			lx.cross(ly, lz);
+
+			//N is the relative position of n from z.
+			Vector3d N;
+			N.sub(n, lz);
+
+			//Since N = kx，lx + ky，ly + kz，lz,
+			//kx = N，lx, ky = N，ly, kz = N，lz.
+			texCoords[i][j][index][0] = (N.dot(lx) + 1) / 2;
+			texCoords[i][j][index][1] = (-N.dot(ly) + 1) / 2;
 		}
+
+	//for (int i = 0; i <= LOD; i++)
+	//	for (int j = 0; j <= LOD; j++)
+	//	{
+	//		// calculating reflecting vector
+	//		Vector3d mapped;
+	//		mapped.sub(center, eye);
+
+	//		/* rotate normal */
+	//		rx = (Cos[1]) * surfaceNormals[i][j][index][0] + (Sin[1]) * surfaceNormals[i][j][index][2];
+	//		ry = (Sin[0] * Sin[1]) * surfaceNormals[i][j][index][0] + (Cos[0]) * surfaceNormals[i][j][index][1] + (-Sin[0] * Cos[1]) * surfaceNormals[i][j][index][2];
+	//		rz = (-Cos[0] * Sin[1]) * surfaceNormals[i][j][index][0] + (Sin[0]) * surfaceNormals[i][j][index][1] + (Cos[0] * Cos[1]) * surfaceNormals[i][j][index][2];
+	//	
+	//		Vector3d n = Vector3d(rx, ry, rz);
+	//		n.scale(-2 * n.dot(mapped));
+	//		mapped.add(n);
+	//		mapped.normalize();
+
+	//		// for sphere mapping
+	//		double sum = sqrt(mapped.x*mapped.x + mapped.y*mapped.y + pow(mapped.z+1,2));
+	//		texCoords[i][j][index][0] = (mapped.x / sum + 1) / 2;
+	//		texCoords[i][j][index][1] = (-mapped.y / sum + 1) / 2;
+	//	}
 
 	glEnable(GL_TEXTURE_2D);
 	for (int i = 0; i < LOD; i++)
@@ -294,6 +323,71 @@ void DrawSurface(int index)
 		glEnd();
 	}
 	glDisable(GL_TEXTURE_2D);}
+
+void mouseCallback(int button, int action, int x, int y)
+{
+	if (action == GLUT_DOWN)
+	{
+		lastX = x;
+		lastY = y;
+
+		mouseButton = button;
+	}
+	else if (action == GLUT_UP)
+	{
+		selectedView = -1;
+		mouseButton = -1;
+	}
+}
+
+void motionCallback(int x, int y)
+{
+	Vector3d lastP = getMousePoint(lastX, lastY, width, height, radius);
+	Vector3d currentP = getMousePoint(x, y, width, height, radius);
+
+	if (mouseButton == GLUT_LEFT_BUTTON)
+	{
+		Vector3d rotateVector;
+		rotateVector.cross(currentP, lastP);
+		double angle = -currentP.angle(lastP) * 2;
+		rotateVector = unProjectToEye(rotateVector, eye, center, upVector);
+
+		Vector3d dEye;
+		dEye.sub(center, eye);
+		dEye = rotate(dEye, rotateVector, -angle);
+		upVector = rotate(upVector, rotateVector, -angle);
+		eye.sub(center, dEye);
+	}
+	else if (mouseButton == GLUT_RIGHT_BUTTON) {
+		Vector3d dEye;
+		dEye.sub(center, eye);
+		double offset = 0.025;
+		if ((y - lastY) < 0) {
+			dEye.scale(1 - offset);
+		}
+		else {
+			dEye.scale(1 + offset);
+		}
+		eye.sub(center, dEye);
+	}
+	else if (mouseButton == GLUT_MIDDLE_BUTTON) {
+		double dx = x - lastX;
+		double dy = y - lastY;
+		if (dx != 0 || dy != 0)
+		{
+			Vector3d moveVector(dx, dy, 0);
+			moveVector = unProjectToEye(moveVector, eye, center, upVector);
+			moveVector.normalize();
+			double eyeDistance = Vector3d(eye).distance(Vector3d(center));
+			moveVector.scale(std::sqrt(dx*dx + dy*dy) / 1000 * eyeDistance);
+			center.add(moveVector);
+			eye.add(moveVector);
+		}
+	}
+	lastX = x;
+	lastY = y;
+	glutPostRedisplay();
+}
 
 void displayCallback()
 {
@@ -313,30 +407,12 @@ void displayCallback()
 	glRotatef(rotate_angle[0], 1.0, 0.0, 0.0);
 	glRotatef(rotate_angle[1], 0.0, 1.0, 0.0);
 
-    glPushMatrix();
-	DrawSurface(0);
-	glPopMatrix();
-
-	glPushMatrix();
-	DrawSurface(1);
-	glPopMatrix();
-
-	glPushMatrix();
-	DrawSurface(2);
-	glPopMatrix();
-
-	glPushMatrix();
-	DrawSurface(3);
-	glPopMatrix();
-
-	glPushMatrix();
-	DrawSurface(4);
-	glPopMatrix();
-
-	glPushMatrix();
-	DrawSurface(5);
-	glPopMatrix();
-
+	for (int i = 0; i < 6; i++)
+	{
+		glPushMatrix();
+		DrawSurface(i);
+		glPopMatrix();
+	}
 	glutSwapBuffers();
 }
 
@@ -347,17 +423,18 @@ void spinDisplay()
 		rotate_angle[Rotate_axis] += 5;
 		if (rotate_angle[Rotate_axis] >= 360.0)
 			rotate_angle[Rotate_axis] -= 360.0;
-	}
 
-	if (EXP == 500)
-		elastic = false;
-	else if (EXP == -500)
-		elastic = true;
-	if (elastic)
-		EXP += 50;
-	else
-		EXP -= 50;
+		if (EXP == 500)
+			elastic = false;
+		else if (EXP == -500)
+			elastic = true;
+		if (elastic)
+			EXP += 50;
+		else
+			EXP -= 50;
+	}
 	glutPostRedisplay();
+	Sleep(20);
 }
 
 void reshapeCallback(int nw, int nh)
@@ -400,6 +477,8 @@ int main(int argc, char **argv)
 	glutDisplayFunc(displayCallback);
 	glutReshapeFunc(reshapeCallback);
 	glutKeyboardFunc(keyboardCallback);
+	glutMouseFunc(mouseCallback);
+	glutMotionFunc(motionCallback);
 	glutIdleFunc(spinDisplay);
 	glutMainLoop();
 	return 0;
