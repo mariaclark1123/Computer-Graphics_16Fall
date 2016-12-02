@@ -3,12 +3,6 @@
 
 #include <gl/freeglut.h>
 
-typedef struct Texture
-{
-	double x;
-	double y;
-}Texture;
-
 unsigned char *loadTGA(const char* filepath, int &width, int &height);
 void initTGA(GLuint *tex, const char *name, int &width, int &height);
 void initPNG(GLuint *tex, const char *name, int &width, int &height);

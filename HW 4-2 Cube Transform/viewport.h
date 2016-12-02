@@ -190,13 +190,6 @@ struct Triangle {
 	}
 };
 
-typedef struct Point
-{
-	double x;
-	double y;
-	double z;
-}Point;
-
 Vector3d rotate(Vector3d input, Vector3d rotateVector, float angle);
 Vector3d unProjectToEye(Vector3d vector, Vector3d& eye, Vector3d& center, Vector3d& upVector);
 Vector3d getMousePoint(int mouseX, int mouseY, int width, int height, float radius);
